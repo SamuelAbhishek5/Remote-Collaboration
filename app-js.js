@@ -11,7 +11,7 @@ let users = [];
 let activities = [];
 
 // API endpoints - replace with your actual backend URLs
-const API_BASE_URL = 'https://api.teamcollab2.com/api';
+const API_BASE_URL = 'http://localhost:5000/remotecollabortaion/api';
 const API_ENDPOINTS = {
     LOGIN: `${API_BASE_URL}/auth/login`,
     REGISTER: `${API_BASE_URL}/auth/register`,
@@ -34,36 +34,51 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Check authentication status
+// Check authentication status
 function checkAuthStatus() {
     const token = localStorage.getItem('authToken');
-    if (token) {
-        // Validate token with backend
-        fetch(API_ENDPOINTS.USERS + '/me', {
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        })
-        .then(response => {
-            if (response.ok) {
-                return response.json();
-            } else {
-                throw new Error('Invalid token');
-            }
-        })
-        .then(userData => {
-            currentUser = userData;
-            showLoggedInState();
-            loadDashboardData();
-        })
-        .catch(error => {
-            console.error('Auth validation error:', error);
-            localStorage.removeItem('authToken');
-            showAuthSection();
-        });
-    } else {
+    const currentPath = window.location.hash.slice(1) || 'dashboard';
+
+    // If no token, show auth section and hide all other sections
+    if (!token) {
+        hideAllSections();
         showAuthSection();
+        return;
     }
+
+    // Validate token with backend
+    fetch(`${API_ENDPOINTS.USERS}/me`, {
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    })
+    .then(response => {
+        if (response.ok) {
+            return response.json();
+        } else {
+            throw new Error('Invalid token');
+        }
+    })
+    .then(userData => {
+        currentUser = userData;
+        showLoggedInState();
+        showSection(currentPath);
+        loadDashboardData();
+    })
+    .catch(error => {
+        console.error('Auth validation error:', error);
+        localStorage.removeItem('authToken');
+        hideAllSections();
+        showAuthSection();
+    });
 }
+// Hide all content sections
+function hideAllSections() {
+    document.querySelectorAll('.content-section').forEach(section => {
+        section.style.display = 'none';
+    });
+}
+
 
 // Setup all event listeners
 function setupEventListeners() {
@@ -71,11 +86,15 @@ function setupEventListeners() {
     document.querySelectorAll('.sidebar-menu li').forEach(item => {
         item.addEventListener('click', function() {
             const section = this.getAttribute('data-section');
-            showSection(section);
             
-            // Update active state
-            document.querySelectorAll('.sidebar-menu li').forEach(li => li.classList.remove('active'));
-            this.classList.add('active');
+            // Check authentication before showing section
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+                showAuthSection();
+                return;
+            }
+            
+            showSection(section);
         });
     });
 
@@ -186,6 +205,7 @@ function handleLogin(e) {
         currentUser = data.user;
         
         // Update UI
+
         showLoggedInState();
         loadDashboardData();
         
@@ -266,55 +286,107 @@ function handleLogout() {
 
 // Show the auth section
 function showAuthSection() {
-    // Hide all sections
-    document.querySelectorAll('.content-section').forEach(section => {
-        section.style.display = 'none';
-    });
-    
-    // Show auth section
+    hideAllSections();
     document.getElementById('auth-section').style.display = 'flex';
+    document.getElementById('login-form-container').style.display = 'block';
+    document.getElementById('register-form-container').style.display = 'none';
+    
+    // Clear any stored auth data
+    localStorage.removeItem('authToken');
+    currentUser = null;
+    
+    // Update UI elements
+    document.getElementById('current-user-name').textContent = 'Not logged in';
+    document.getElementById('login-btn').style.display = 'block';
+    document.getElementById('logout-btn').style.display = 'none';
 }
+
 
 // Show logged in state
 function showLoggedInState() {
+    if (!currentUser) {
+        showAuthSection();
+        return;
+    }
+    
     // Update user info
     document.getElementById('current-user-name').textContent = currentUser.name;
     document.getElementById('login-btn').style.display = 'none';
     document.getElementById('logout-btn').style.display = 'block';
-    
-    // Show dashboard as default section
-    showSection('dashboard');
 }
+
+// Initialize the application
+document.addEventListener('DOMContentLoaded', () => {
+    // Check authentication status on page load
+    checkAuthStatus();
+    
+    // Setup event listeners
+    setupEventListeners();
+    
+    // Handle browser navigation
+    window.addEventListener('hashchange', () => {
+        const currentPath = window.location.hash.slice(1) || 'dashboard';
+        showSection(currentPath);
+    });
+});
+
 
 // Show specific section
 function showSection(sectionId) {
+    const token = localStorage.getItem('authToken');
+    
+    // If no token, redirect to auth section
+    if (!token) {
+        showAuthSection();
+        return;
+    }
+    
+    // List of protected sections
+    const protectedSections = ['dashboard', 'projects', 'tasks', 'documents', 'team'];
+    
+    // If trying to access protected section without auth, show auth section
+    if (protectedSections.includes(sectionId) && !currentUser) {
+        showAuthSection();
+        return;
+    }
+    
     // Hide all sections
-    document.querySelectorAll('.content-section').forEach(section => {
-        section.style.display = 'none';
-    });
+    //hideAllSections();
     
     // Show selected section
-    document.getElementById(sectionId).style.display = 'block';
-    
-    // Load section data if needed
-    switch(sectionId) {
-        case 'dashboard':
-            loadDashboardData();
-            break;
-        case 'projects':
-            loadProjects();
-            break;
-        case 'tasks':
-            loadTasks();
-            break;
-        case 'documents':
-            loadDocuments();
-            break;
-        case 'team':
-            loadTeamMembers();
-            break;
+    const selectedSection = document.getElementById(sectionId);
+    if (selectedSection) {
+        selectedSection.style.display = 'block';
+        
+        // Update active state in sidebar
+        document.querySelectorAll('.sidebar-menu li').forEach(li => {
+            li.classList.remove('active');
+            if (li.getAttribute('data-section') === sectionId) {
+                li.classList.add('active');
+            }
+        });
+        
+        // Load section data if needed
+        switch(sectionId) {
+            case 'dashboard':
+                loadDashboardData();
+                break;
+            case 'projects':
+                loadProjects();
+                break;
+            case 'tasks':
+                loadTasks();
+                break;
+            case 'documents':
+                loadDocuments();
+                break;
+            case 'team':
+                loadTeamMembers();
+                break;
+        }
     }
 }
+
 
 // DATA LOADING FUNCTIONS
 
@@ -351,6 +423,11 @@ function loadDashboardData() {
 
 // Load projects data
 function loadProjects() {
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+        showAuthSection();
+        return;
+    }
     fetch(API_ENDPOINTS.PROJECTS, getAuthHeader())
         .then(response => response.json())
         .then(data => {
@@ -365,6 +442,11 @@ function loadProjects() {
 
 // Load tasks data
 function loadTasks() {
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+        showAuthSection();
+        return;
+    }
     Promise.all([
         fetch(API_ENDPOINTS.TASKS, getAuthHeader()),
         fetch(API_ENDPOINTS.PROJECTS, getAuthHeader())
@@ -385,6 +467,11 @@ function loadTasks() {
 
 // Load documents data
 function loadDocuments() {
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+        showAuthSection();
+        return;
+    }
     Promise.all([
         fetch(API_ENDPOINTS.DOCUMENTS, getAuthHeader()),
         fetch(API_ENDPOINTS.PROJECTS, getAuthHeader())
@@ -405,6 +492,11 @@ function loadDocuments() {
 
 // Load team members data
 function loadTeamMembers() {
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+        showAuthSection();
+        return;
+    }
     Promise.all([
         fetch(API_ENDPOINTS.USERS, getAuthHeader()),
         fetch(API_ENDPOINTS.PROJECTS, getAuthHeader())
