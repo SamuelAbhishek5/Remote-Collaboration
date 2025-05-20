@@ -880,3 +880,425 @@ function openTaskModal(taskId = null) {
     // Show modal
     modal.style.display = 'block';
 }
+// UTILITY FUNCTIONS
+
+// Format date to readable string
+function formatDate(date) {
+    return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+    });
+}
+
+// Format time ago (for activities)
+function formatTimeAgo(date) {
+    const seconds = Math.floor((new Date() - date) / 1000);
+    const intervals = {
+        year: 31536000,
+        month: 2592000,
+        week: 604800,
+        day: 86400,
+        hour: 3600,
+        minute: 60
+    };
+    
+    for (let [unit, secondsInUnit] of Object.entries(intervals)) {
+        const interval = Math.floor(seconds / secondsInUnit);
+        if (interval >= 1) {
+            return `${interval} ${unit}${interval === 1 ? '' : 's'} ago`;
+        }
+    }
+    return 'Just now';
+}
+
+// Format status for display
+function formatStatus(status) {
+    return status.split('-').map(word => 
+        word.charAt(0).toUpperCase() + word.slice(1)
+    ).join(' ');
+}
+
+// Format document type for display
+function formatDocType(type) {
+    return type.charAt(0).toUpperCase() + type.slice(1);
+}
+
+// Calculate days remaining until deadline
+function calculateDaysRemaining(dueDate) {
+    const today = new Date();
+    const diffTime = dueDate - today;
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+}
+
+// Get authorization header
+function getAuthHeader() {
+    return {
+        headers: {
+            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+        }
+    };
+}
+
+// MODAL FUNCTIONS
+
+// Open document modal
+function openDocumentModal(docId = null) {
+    const modal = document.getElementById('document-modal');
+    const modalTitle = document.getElementById('document-modal-title');
+    const form = document.getElementById('document-form');
+    
+    if (docId) {
+        const doc = documents.find(d => d._id === docId);
+        if (doc) {
+            modalTitle.textContent = 'Edit Document';
+            form.elements['document-id'].value = doc._id;
+            form.elements['document-title'].value = doc.title;
+            form.elements['document-description'].value = doc.description;
+            form.elements['document-project'].value = doc.projectId;
+            form.elements['document-type'].value = doc.type;
+        }
+    } else {
+        modalTitle.textContent = 'Add New Document';
+        form.reset();
+        form.elements['document-id'].value = '';
+    }
+    
+    modal.style.display = 'block';
+}
+
+// Close modal
+function closeModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+}
+
+// FILTERING FUNCTIONS
+
+// Filter projects
+function filterProjects() {
+    const searchTerm = document.getElementById('project-search').value.toLowerCase();
+    const statusFilter = document.getElementById('project-status-filter').value;
+    
+    const filteredProjects = projects.filter(project => {
+        const matchesSearch = project.name.toLowerCase().includes(searchTerm) ||
+                            project.description.toLowerCase().includes(searchTerm);
+        const matchesStatus = statusFilter === 'all' || project.status === statusFilter;
+        
+        return matchesSearch && matchesStatus;
+    });
+    
+    renderProjects(filteredProjects);
+}
+
+// Filter tasks
+function filterTasks() {
+    const searchTerm = document.getElementById('task-search').value.toLowerCase();
+    const projectFilter = document.getElementById('task-project-filter').value;
+    const statusFilter = document.getElementById('task-status-filter').value;
+    
+    const filteredTasks = tasks.filter(task => {
+        const matchesSearch = task.title.toLowerCase().includes(searchTerm) ||
+                            task.description.toLowerCase().includes(searchTerm);
+        const matchesProject = projectFilter === 'all' || task.projectId === projectFilter;
+        const matchesStatus = statusFilter === 'all' || task.status === statusFilter;
+        
+        return matchesSearch && matchesProject && matchesStatus;
+    });
+    
+    renderTasks(filteredTasks);
+}
+
+// Filter documents
+function filterDocuments() {
+    const searchTerm = document.getElementById('document-search').value.toLowerCase();
+    const projectFilter = document.getElementById('document-project-filter').value;
+    const typeFilter = document.getElementById('document-type-filter').value;
+    
+    const filteredDocs = documents.filter(doc => {
+        const matchesSearch = doc.title.toLowerCase().includes(searchTerm) ||
+                            doc.description.toLowerCase().includes(searchTerm);
+        const matchesProject = projectFilter === 'all' || doc.projectId === projectFilter;
+        const matchesType = typeFilter === 'all' || doc.type === typeFilter;
+        
+        return matchesSearch && matchesProject && matchesType;
+    });
+    
+    renderDocuments(filteredDocs);
+}
+
+// Filter team members
+function filterTeamMembers() {
+    const searchTerm = document.getElementById('team-search').value.toLowerCase();
+    const roleFilter = document.getElementById('team-role-filter').value;
+    
+    const filteredMembers = users.filter(user => {
+        const matchesSearch = user.name.toLowerCase().includes(searchTerm) ||
+                            user.email.toLowerCase().includes(searchTerm);
+        const matchesRole = roleFilter === 'all' || user.role === roleFilter;
+        
+        return matchesSearch && matchesRole;
+    });
+    
+    renderTeamMembers(filteredMembers);
+}
+
+// FORM HANDLING FUNCTIONS
+
+// Handle project form submission
+function handleProjectSubmit(e) {
+    e.preventDefault();
+    
+    const projectData = {
+        id: document.getElementById('project-id').value,
+        name: document.getElementById('project-name').value,
+        description: document.getElementById('project-description').value,
+        startDate: document.getElementById('project-start-date').value,
+        endDate: document.getElementById('project-end-date').value,
+        status: document.getElementById('project-status').value,
+        team: Array.from(document.getElementById('project-team').selectedOptions).map(opt => opt.value)
+    };
+    
+    const method = projectData.id ? 'PUT' : 'POST';
+    const url = projectData.id ? 
+        `${API_ENDPOINTS.PROJECTS}/${projectData.id}` : 
+        API_ENDPOINTS.PROJECTS;
+    
+    fetch(url, {
+        method,
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+        },
+        body: JSON.stringify(projectData)
+    })
+    .then(response => {
+        if (response.ok) return response.json();
+        throw new Error('Project save failed');
+    })
+    .then(data => {
+        if (projectData.id) {
+            const index = projects.findIndex(p => p._id === projectData.id);
+            if (index !== -1) projects[index] = data;
+        } else {
+            projects.push(data);
+        }
+        
+        closeModal('project-modal');
+        renderProjects();
+        updateProjectDropdowns();
+        
+        // Log activity
+        logActivity(
+            projectData.id ? 'Project updated' : 'Project created',
+            'project',
+            data.name
+        );
+    })
+    .catch(error => {
+        console.error('Project save error:', error);
+        alert('Failed to save project. Please try again.');
+    });
+}
+
+// Handle task form submission
+function handleTaskSubmit(e) {
+    e.preventDefault();
+    
+    const taskData = {
+        id: document.getElementById('task-id').value,
+        title: document.getElementById('task-title').value,
+        description: document.getElementById('task-description').value,
+        projectId: document.getElementById('task-project').value,
+        dueDate: document.getElementById('task-due-date').value,
+        priority: document.getElementById('task-priority').value,
+        status: document.getElementById('task-status').value,
+        assigneeId: document.getElementById('task-assignee').value
+    };
+    
+    const method = taskData.id ? 'PUT' : 'POST';
+    const url = taskData.id ? 
+        `${API_ENDPOINTS.TASKS}/${taskData.id}` : 
+        API_ENDPOINTS.TASKS;
+    
+    fetch(url, {
+        method,
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+        },
+        body: JSON.stringify(taskData)
+    })
+    .then(response => {
+        if (response.ok) return response.json();
+        throw new Error('Task save failed');
+    })
+    .then(data => {
+        if (taskData.id) {
+            const index = tasks.findIndex(t => t._id === taskData.id);
+            if (index !== -1) tasks[index] = data;
+        } else {
+            tasks.push(data);
+        }
+        
+        closeModal('task-modal');
+        renderTasks();
+        
+        // Log activity
+        logActivity(
+            taskData.id ? 'Task updated' : 'Task created',
+            'task',
+            data.title
+        );
+    })
+    .catch(error => {
+        console.error('Task save error:', error);
+        alert('Failed to save task. Please try again.');
+    });
+}
+
+// Handle document form submission
+function handleDocumentSubmit(e) {
+    e.preventDefault();
+    
+    const documentData = {
+        id: document.getElementById('document-id').value,
+        title: document.getElementById('document-title').value,
+        description: document.getElementById('document-description').value,
+        projectId: document.getElementById('document-project').value,
+        type: document.getElementById('document-type').value
+    };
+    
+    const method = documentData.id ? 'PUT' : 'POST';
+    const url = documentData.id ? 
+        `${API_ENDPOINTS.DOCUMENTS}/${documentData.id}` : 
+        API_ENDPOINTS.DOCUMENTS;
+    
+    fetch(url, {
+        method,
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+        },
+        body: JSON.stringify(documentData)
+    })
+    .then(response => {
+        if (response.ok) return response.json();
+        throw new Error('Document save failed');
+    })
+    .then(data => {
+        if (documentData.id) {
+            const index = documents.findIndex(d => d._id === documentData.id);
+            if (index !== -1) documents[index] = data;
+        } else {
+            documents.push(data);
+        }
+        
+        closeModal('document-modal');
+        renderDocuments();
+        
+        // Log activity
+        logActivity(
+            documentData.id ? 'Document updated' : 'Document created',
+            'document',
+            data.title
+        );
+    })
+    .catch(error => {
+        console.error('Document save error:', error);
+        alert('Failed to save document. Please try again.');
+    });
+}
+
+// Handle team member invitation
+function handleInviteSubmit(e) {
+    e.preventDefault();
+    
+    const inviteData = {
+        email: document.getElementById('invite-email').value,
+        role: document.getElementById('invite-role').value,
+        projects: Array.from(document.getElementById('invite-projects').selectedOptions).map(opt => opt.value)
+    };
+    
+    fetch(API_ENDPOINTS.INVITATIONS, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+        },
+        body: JSON.stringify(inviteData)
+    })
+    .then(response => {
+        if (response.ok) return response.json();
+        throw new Error('Invitation failed');
+    })
+    .then(data => {
+        closeModal('invite-modal');
+        alert('Invitation sent successfully!');
+        
+        // Log activity
+        logActivity(
+            'Team member invited',
+            'user',
+            inviteData.email
+        );
+    })
+    .catch(error => {
+        console.error('Invitation error:', error);
+        alert('Failed to send invitation. Please try again.');
+    });
+}
+
+// Log activity
+function logActivity(description, type, target = '') {
+    const activity = {
+        description,
+        type,
+        target,
+        timestamp: new Date().toISOString(),
+        userId: currentUser._id
+    };
+    
+    fetch(API_ENDPOINTS.ACTIVITIES, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+        },
+        body: JSON.stringify(activity)
+    })
+    .then(response => {
+        if (response.ok) return response.json();
+        throw new Error('Activity logging failed');
+    })
+    .then(data => {
+        activities.unshift(data);
+        renderActivities();
+    })
+    .catch(error => {
+        console.error('Activity logging error:', error);
+    });
+}
+
+// Update dropdowns with project options
+function updateProjectDropdowns() {
+    const dropdowns = [
+        'task-project',
+        'document-project',
+        'invite-projects'
+    ];
+    
+    const options = projects.map(project => 
+        `<option value="${project._id}">${project.name}</option>`
+    ).join('');
+    
+    dropdowns.forEach(id => {
+        const dropdown = document.getElementById(id);
+        if (dropdown) {
+            const currentValue = dropdown.value;
+            dropdown.innerHTML = '<option value="all">All Projects</option>' + options;
+            if (currentValue && currentValue !== 'all') {
+                dropdown.value = currentValue;
+            }
+        }
+    });
+}
