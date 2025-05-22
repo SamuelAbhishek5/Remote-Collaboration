@@ -23,7 +23,7 @@ const API_ENDPOINTS = {
     ACTIVITIES: `${API_BASE_URL}/activities`,
     INVITATIONS: `${API_BASE_URL}/invitations`
 };
-
+//document.getElementById("project-modal").style.display = "flex";
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
     // Check if user is logged in (from session/localStorage)  // Setup event listeners
@@ -106,6 +106,7 @@ function setupEventListeners() {
         e.preventDefault();
         toggleAuthForms();
     });
+    
 
     // Login form submission
     document.getElementById('login-form').addEventListener('submit', handleLogin);
@@ -442,7 +443,7 @@ function loadProjects() {
         .then(data => {
             projects = data;
             renderProjects();
-            updateProjectDropdowns();
+            //updateProjectDropdowns();
         })
         .catch(error => {
             console.error('Error loading projects:', error);
@@ -887,50 +888,82 @@ function renderTeamMembers() {
 // Open project modal (create or edit)
 function openProjectModal(projectId = null) {
     const modal = document.getElementById('project-modal');
-    const modalTitle = document.getElementById('project-modal-title');
     const form = document.getElementById('project-form');
-    
+    const modalTitle = document.getElementById('project-modal-title');
+
     // Reset form
     form.reset();
-    
+
+    // Handle edit vs create mode
     if (projectId) {
-        // Edit existing project
-        const project = projects.find(p => p._id === projectId);
-        if (!project) return;
-        
-        modalTitle.textContent = 'Edit Project';
-        document.getElementById('project-id').value = project._id;
-        document.getElementById('project-name').value = project.name;
-        document.getElementById('project-description').value = project.description;
-        document.getElementById('project-start-date').value = formatDateForInput(new Date(project.startDate));
-        document.getElementById('project-end-date').value = formatDateForInput(new Date(project.endDate));
-        document.getElementById('project-status').value = project.status;
-        
-        // Set selected team members
-        const teamSelect = document.getElementById('project-team');
-        Array.from(teamSelect.options).forEach(option => {
-            option.selected = project.team.some(member => member._id === option.value);
-        });
+        // Edit mode - fetch existing project data
+        fetch(`${API_ENDPOINTS.PROJECTS}/${projectId}`, {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(project => {
+            modalTitle.textContent = 'Edit Project';
+            // Populate form with project data matching the schema
+            //document.getElementById('project-id').value = project._id;
+            document.getElementById('project-name').value = project.name;
+            document.getElementById('project-description').value = project.description;
+            document.getElementById('project-start-date').value = formatDateForInput(new Date(project.startDate));
+            document.getElementById('project-end-date').value = formatDateForInput(new Date(project.endDate));
+            document.getElementById('project-status').value = project.status;
+            document.getElementById('project-owner').value = project.owner;
+            // Note: owner field is not editable in the form since it's set on creation
+        })
+        .catch(err => console.error('Error fetching project:', err));
     } else {
-        // Create new project
-        modalTitle.textContent = 'Add New Project';
+        // Create mode
+        modalTitle.textContent = 'Create New Project';
         document.getElementById('project-id').value = '';
         
-        // Set default dates to today and today + 1 month
-        const today = new Date();
-        const nextMonth = new Date();
-        nextMonth.setMonth(nextMonth.getMonth() + 1);
+        // Set default dates
+        // Populate project owner dropdown with users
+        fetch(`${API_ENDPOINTS.USERS}/names`, getAuthHeader())
+            .then(response => response.json())
+            .then(users => {
+                const ownerSelect = document.getElementById('project-owner');
+                ownerSelect.innerHTML = '';
+                users.forEach(user => {
+                    const option = document.createElement('option');
+                    option.value = user._id;
+                    option.textContent = user.name;
+                    ownerSelect.appendChild(option);
+                });
+                // Set current user as default owner
+                if (currentUser) {
+                    ownerSelect.value = currentUser._id;
+                }
+            })
+            .catch(error => {
+                console.error('Error loading users:', error);
+                // Add a default option if users can't be loaded
+                const option = document.createElement('option');
+                option.value = currentUser._id;
+                option.textContent = currentUser.name;
+                document.getElementById('project-owner').appendChild(option);
+            });
         
+        const today = new Date();
         document.getElementById('project-start-date').value = formatDateForInput(today);
-        document.getElementById('project-end-date').value = formatDateForInput(nextMonth);
+        document.getElementById('project-end-date').value = formatDateForInput(new Date(today.setMonth(today.getMonth() + 1)));
     }
-    
-    // Populate team members dropdown
-    populateTeamMembersDropdown();
-    
-    // Show modal
-    modal.style.display = 'block';
 
+
+    modal.style.display = 'block';
+}
+
+// Format date for input fields (YYYY-MM-DD format)
+function formatDateForInput(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
 }
 // Open task modal (create or edit)
 function openTaskModal(taskId = null) {
@@ -1149,19 +1182,36 @@ function filterTeamMembers() {
 function handleProjectSubmit(e) {
     e.preventDefault();
     
+    // Get project ID if editing existing project
+    const projectId = document.getElementById('project-id')?.value;
+    
     const projectData = {
-        id: document.getElementById('project-id').value,
         name: document.getElementById('project-name').value,
-        description: document.getElementById('project-description').value,
+        description: document.getElementById('project-description').value, 
+        owner: document.getElementById('project-owner').value || currentUser._id,
         startDate: document.getElementById('project-start-date').value,
         endDate: document.getElementById('project-end-date').value,
-        status: document.getElementById('project-status').value,
-        team: Array.from(document.getElementById('project-team').selectedOptions).map(opt => opt.value)
+        status: document.getElementById('project-status').value
+        //team: [] // Initialize empty team array
     };
+
+    // Validate required fields
+    if (!projectData.name || !projectData.startDate || !projectData.endDate) {
+        alert('Please fill in all required fields');
+        return;
+    }
+
+    // Validate dates
+    const start = new Date(projectData.startDate);
+    const end = new Date(projectData.endDate);
+    if (end < start) {
+        alert('End date cannot be before start date');
+        return;
+    }
     
-    const method = projectData.id ? 'PUT' : 'POST';
-    const url = projectData.id ? 
-        `${API_ENDPOINTS.PROJECTS}/${projectData.id}` : 
+    const method = projectId ? 'PUT' : 'POST';
+    const url = projectId ? 
+        `${API_ENDPOINTS.PROJECTS}/${projectId}` : 
         API_ENDPOINTS.PROJECTS;
     
     fetch(url, {
@@ -1173,12 +1223,12 @@ function handleProjectSubmit(e) {
         body: JSON.stringify(projectData)
     })
     .then(response => {
-        if (response.ok) return response.json();
-        throw new Error('Project save failed');
+        if (!response.ok) throw new Error(response.statusText);
+        return response.json();
     })
     .then(data => {
-        if (projectData.id) {
-            const index = projects.findIndex(p => p._id === projectData.id);
+        if (projectId) {
+            const index = projects.findIndex(p => p._id === projectId);
             if (index !== -1) projects[index] = data;
         } else {
             projects.push(data);
@@ -1186,18 +1236,21 @@ function handleProjectSubmit(e) {
         
         closeModal('project-modal');
         renderProjects();
-        updateProjectDropdowns();
+        //updateProjectDropdowns();
         
         // Log activity
         logActivity(
-            projectData.id ? 'Project updated' : 'Project created',
+            projectId ? 'Project updated' : 'Project created',
             'project',
             data.name
         );
+
+        // Show success message
+        alert(`Project successfully ${projectId ? 'updated' : 'created'}!`);
     })
     .catch(error => {
         console.error('Project save error:', error);
-        alert('Failed to save project. Please try again.');
+        alert(`Failed to ${projectId ? 'update' : 'create'} project: ${error.message}`);
     });
 }
 
@@ -1403,3 +1456,157 @@ function updateProjectDropdowns() {
         }
     });
 }
+async function fetchProjects() {
+    try {
+        const response = await fetch(`${API_URL}/projects`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        const projects = await response.json();
+        const projectSelect = document.getElementById('taskProject');
+        projectSelect.innerHTML = '<option value="">Select Project</option>';
+        projects.forEach(project => {
+            projectSelect.innerHTML += `<option value="${project._id}">${project.name}</option>`;
+        });
+    } catch (error) {
+        console.error('Error fetching projects:', error);
+    }
+}
+
+// Fetch all users
+async function fetchUsers() {
+    try {
+        const response = await fetch(`${API_URL}/users`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        const users = await response.json();
+        const assigneeSelect = document.getElementById('taskAssignee');
+        assigneeSelect.innerHTML = '<option value="">Select Assignee</option>';
+        users.forEach(user => {
+            assigneeSelect.innerHTML += `<option value="${user._id}">${user.name}</option>`;
+        });
+    } catch (error) {
+        console.error('Error fetching users:', error);
+    }
+}
+
+// Fetch all tasks
+async function fetchTasks() {
+    try {
+        const response = await fetch(`${API_URL}/tasks`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        const tasks = await response.json();
+        const taskSelect = document.getElementById('documentTask');
+        taskSelect.innerHTML = '<option value="">Select Task</option>';
+        tasks.forEach(task => {
+            taskSelect.innerHTML += `<option value="${task._id}">${task.title}</option>`;
+        });
+    } catch (error) {
+        console.error('Error fetching tasks:', error);
+    }
+}
+
+// Create Project
+document.getElementById('projectForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const projectData = {
+        name: document.getElementById('projectName').value,
+        description: document.getElementById('projectDescription').value,
+        startDate: document.getElementById('projectStartDate').value,
+        endDate: document.getElementById('projectEndDate').value
+    };
+
+    try {
+        const response = await fetch(`${API_URL}/projects`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(projectData)
+        });
+
+        if (response.ok) {
+            alert('Project created successfully!');
+            document.getElementById('projectForm').reset();
+            fetchProjects();
+        } else {
+            throw new Error('Failed to create project');
+        }
+    } catch (error) {
+        console.error('Error creating project:', error);
+        alert('Failed to create project');
+    }
+});
+
+// Create Task
+document.getElementById('taskForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const taskData = {
+        title: document.getElementById('taskTitle').value,
+        description: document.getElementById('taskDescription').value,
+        projectId: document.getElementById('taskProject').value,
+        assignedTo: document.getElementById('taskAssignee').value,
+        dueDate: document.getElementById('taskDueDate').value,
+        priority: document.getElementById('taskPriority').value
+    };
+
+    try {
+        const response = await fetch(`${API_URL}/tasks`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(taskData)
+        });
+
+        if (response.ok) {
+            alert('Task created successfully!');
+            document.getElementById('taskForm').reset();
+            fetchTasks();
+        } else {
+            throw new Error('Failed to create task');
+        }
+    } catch (error) {
+        console.error('Error creating task:', error);
+        alert('Failed to create task');
+    }
+});
+
+// Create Document
+document.getElementById('documentForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const documentData = {
+        fileName: document.getElementById('fileName').value,
+        fileType: document.getElementById('fileType').value,
+        taskId: document.getElementById('documentTask').value
+    };
+
+    try {
+        const response = await fetch(`${API_URL}/documents`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(documentData)
+        });
+
+        if (response.ok) {
+            alert('Document uploaded successfully!');
+            document.getElementById('documentForm').reset();
+        } else {
+            throw new Error('Failed to upload document');
+        }
+    } catch (error) {
+        console.error('Error uploading document:', error);
+        alert('Failed to upload document');
+    }
+});

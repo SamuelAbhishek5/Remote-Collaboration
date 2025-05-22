@@ -177,6 +177,12 @@
                                 <label for="project-description">Description</label>
                                 <textarea id="project-description" required></textarea>
                             </div>
+                            <div class="form-group">
+                                <label for="project-owner">Project Owner</label>
+                                <select id="project-owner" required>
+                                    <!-- Team members will be populated dynamically from users collection -->
+                                </select>
+                            </div>
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="project-start-date">Start Date</label>
@@ -190,15 +196,9 @@
                             <div class="form-group">
                                 <label for="project-status">Status</label>
                                 <select id="project-status" required>
-                                    <option value="in-progress">In Progress</option>
-                                    <option value="completed">Completed</option>
-                                    <option value="on-hold">On Hold</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="project-team">Team Members</label>
-                                <select id="project-team" multiple>
-                                    <!-- Team members will be populated dynamically -->
+                                    <option value="Not Started">Not Started</option>
+                                    <option value="In Progress">In Progress</option>
+                                    <option value="Completed">Completed</option>
                                 </select>
                             </div>
                             <div class="form-actions">
@@ -208,7 +208,7 @@
                         </form>
                     </div>
                 </div>
-
+                
                 <!-- Project Details Modal -->
                 <div id="project-details-modal" class="modal">
                     <div class="modal-content">
@@ -382,6 +382,7 @@
                             <div class="form-group">
                                 <label for="document-project">Related Project</label>
                                 <select id="document-project" required>
+                                    <option value="documentation">Documentation</option>
                                     <!-- Projects will be populated dynamically -->
                                 </select>
                             </div>
