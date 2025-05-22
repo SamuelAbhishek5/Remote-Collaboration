@@ -11,7 +11,7 @@ let users = [];
 let activities = [];
 
 // API endpoints - replace with your actual backend URLs
-const API_BASE_URL = 'http://localhost:5000/remotecollabortaion/api';
+const API_BASE_URL = 'http://localhost:5000/api';
 const API_ENDPOINTS = {
     LOGIN: `${API_BASE_URL}/auth/login`,
     REGISTER: `${API_BASE_URL}/auth/register`,
@@ -26,11 +26,9 @@ const API_ENDPOINTS = {
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
-    // Check if user is logged in (from session/localStorage)
-    checkAuthStatus();
-    
-    // Setup event listeners
+    // Check if user is logged in (from session/localStorage)  // Setup event listeners
     setupEventListeners();
+    checkAuthStatus();
 });
 
 // Check authentication status
@@ -182,6 +180,7 @@ function toggleAuthForms() {
 }
 
 // Handle login form submission
+// Handle login form submission
 function handleLogin(e) {
     e.preventDefault();
     
@@ -196,17 +195,25 @@ function handleLogin(e) {
         body: JSON.stringify({ email, password })
     })
     .then(response => {
-        if (response.ok) return response.json();
-        throw new Error('Login failed');
+        return response.json().then(data => {
+            if (response.ok) {
+                return data;
+            } else {
+                throw new Error(data.message || 'Login failed');
+            }
+        });
     })
     .then(data => {
         // Store auth token
         localStorage.setItem('authToken', data.token);
         currentUser = data.user;
         
-        // Update UI
-
+        // Hide auth section
+        document.getElementById('auth-section').style.display = 'none';
+        
+        // Update UI and show dashboard
         showLoggedInState();
+        showSection('dashboard');
         loadDashboardData();
         
         // Log activity
@@ -214,7 +221,7 @@ function handleLogin(e) {
     })
     .catch(error => {
         console.error('Login error:', error);
-        alert('Login failed. Please check your credentials.');
+        alert(error.message || 'Login failed. Please check your credentials.');
     });
 }
 
@@ -227,6 +234,12 @@ function handleRegister(e) {
     const password = document.getElementById('register-password').value;
     const role = document.getElementById('register-role').value;
     
+    // Basic validation
+    if (!name || !email || !password || !role) {
+        alert('Please fill in all fields');
+        return;
+    }
+    
     fetch(API_ENDPOINTS.REGISTER, {
         method: 'POST',
         headers: {
@@ -235,16 +248,25 @@ function handleRegister(e) {
         body: JSON.stringify({ name, email, password, role })
     })
     .then(response => {
-        if (response.ok) return response.json();
-        throw new Error('Registration failed');
+        return response.json().then(data => {
+            if (response.ok) {
+                return data;
+            } else {
+                throw new Error(data.message || 'Registration failed');
+            }
+        });
     })
     .then(data => {
         // Store auth token
         localStorage.setItem('authToken', data.token);
         currentUser = data.user;
         
-        // Update UI
+        // Hide auth section
+        document.getElementById('auth-section').style.display = 'none';
+        
+        // Update UI and show dashboard
         showLoggedInState();
+        showSection('dashboard');
         loadDashboardData();
         
         // Log activity
@@ -252,7 +274,7 @@ function handleRegister(e) {
     })
     .catch(error => {
         console.error('Registration error:', error);
-        alert('Registration failed. Please try again.');
+        alert(error.message || 'Registration failed. Please try again.');
     });
 }
 
@@ -286,7 +308,7 @@ function handleLogout() {
 
 // Show the auth section
 function showAuthSection() {
-    hideAllSections();
+    //hideAllSections();
     document.getElementById('auth-section').style.display = 'flex';
     document.getElementById('login-form-container').style.display = 'block';
     document.getElementById('register-form-container').style.display = 'none';
@@ -350,8 +372,8 @@ function showSection(sectionId) {
         return;
     }
     
-    // Hide all sections
-    //hideAllSections();
+    // Hide all sections - UNCOMMENT THIS LINE
+    hideAllSections();
     
     // Show selected section
     const selectedSection = document.getElementById(sectionId);
@@ -367,26 +389,13 @@ function showSection(sectionId) {
         });
         
         // Load section data if needed
-        switch(sectionId) {
-            case 'dashboard':
-                loadDashboardData();
-                break;
-            case 'projects':
-                loadProjects();
-                break;
-            case 'tasks':
-                loadTasks();
-                break;
-            case 'documents':
-                loadDocuments();
-                break;
-            case 'team':
-                loadTeamMembers();
-                break;
-        }
+        if (sectionId === 'dashboard') loadDashboardData();
+        else if (sectionId === 'projects') loadProjects();
+        else if (sectionId === 'tasks') loadTasks();
+        else if (sectionId === 'documents') loadDocuments();
+        else if (sectionId === 'team') loadTeamMembers();
     }
 }
-
 
 // DATA LOADING FUNCTIONS
 
