@@ -1182,6 +1182,13 @@ function filterTeamMembers() {
 function handleProjectSubmit(e) {
     e.preventDefault();
     
+    // Get the auth token
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+        alert('You must be logged in to create/edit projects');
+        return;
+    }
+    
     // Get project ID if editing existing project
     const projectId = document.getElementById('project-id')?.value;
     
@@ -1192,7 +1199,6 @@ function handleProjectSubmit(e) {
         startDate: document.getElementById('project-start-date').value,
         endDate: document.getElementById('project-end-date').value,
         status: document.getElementById('project-status').value
-        //team: [] // Initialize empty team array
     };
 
     // Validate required fields
@@ -1218,12 +1224,18 @@ function handleProjectSubmit(e) {
         method,
         headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+            'Authorization': `Bearer ${token}`, // Properly include the token
+            'Accept': 'application/json'
         },
         body: JSON.stringify(projectData)
     })
     .then(response => {
-        if (!response.ok) throw new Error(response.statusText);
+        if (response.status === 401) {
+            throw new Error('Unauthorized - Please log in again');
+        }
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
         return response.json();
     })
     .then(data => {
@@ -1236,7 +1248,6 @@ function handleProjectSubmit(e) {
         
         closeModal('project-modal');
         renderProjects();
-        //updateProjectDropdowns();
         
         // Log activity
         logActivity(
@@ -1250,10 +1261,16 @@ function handleProjectSubmit(e) {
     })
     .catch(error => {
         console.error('Project save error:', error);
-        alert(`Failed to ${projectId ? 'update' : 'create'} project: ${error.message}`);
+        if (error.message.includes('Unauthorized')) {
+            // Handle unauthorized error
+            localStorage.removeItem('authToken'); // Clear invalid token
+            showAuthSection(); // Redirect to login
+            alert('Your session has expired. Please log in again.');
+        } else {
+            alert(`Failed to ${projectId ? 'update' : 'create'} project: ${error.message}`);
+        }
     });
 }
-
 // Handle task form submission
 function handleTaskSubmit(e) {
     e.preventDefault();
@@ -1511,102 +1528,3 @@ async function fetchTasks() {
         console.error('Error fetching tasks:', error);
     }
 }
-
-// Create Project
-document.getElementById('projectForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const projectData = {
-        name: document.getElementById('projectName').value,
-        description: document.getElementById('projectDescription').value,
-        startDate: document.getElementById('projectStartDate').value,
-        endDate: document.getElementById('projectEndDate').value
-    };
-
-    try {
-        const response = await fetch(`${API_URL}/projects`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify(projectData)
-        });
-
-        if (response.ok) {
-            alert('Project created successfully!');
-            document.getElementById('projectForm').reset();
-            fetchProjects();
-        } else {
-            throw new Error('Failed to create project');
-        }
-    } catch (error) {
-        console.error('Error creating project:', error);
-        alert('Failed to create project');
-    }
-});
-
-// Create Task
-document.getElementById('taskForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const taskData = {
-        title: document.getElementById('taskTitle').value,
-        description: document.getElementById('taskDescription').value,
-        projectId: document.getElementById('taskProject').value,
-        assignedTo: document.getElementById('taskAssignee').value,
-        dueDate: document.getElementById('taskDueDate').value,
-        priority: document.getElementById('taskPriority').value
-    };
-
-    try {
-        const response = await fetch(`${API_URL}/tasks`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify(taskData)
-        });
-
-        if (response.ok) {
-            alert('Task created successfully!');
-            document.getElementById('taskForm').reset();
-            fetchTasks();
-        } else {
-            throw new Error('Failed to create task');
-        }
-    } catch (error) {
-        console.error('Error creating task:', error);
-        alert('Failed to create task');
-    }
-});
-
-// Create Document
-document.getElementById('documentForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const documentData = {
-        fileName: document.getElementById('fileName').value,
-        fileType: document.getElementById('fileType').value,
-        taskId: document.getElementById('documentTask').value
-    };
-
-    try {
-        const response = await fetch(`${API_URL}/documents`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify(documentData)
-        });
-
-        if (response.ok) {
-            alert('Document uploaded successfully!');
-            document.getElementById('documentForm').reset();
-        } else {
-            throw new Error('Failed to upload document');
-        }
-    } catch (error) {
-        console.error('Error uploading document:', error);
-        alert('Failed to upload document');
-    }
-});

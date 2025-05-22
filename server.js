@@ -250,14 +250,14 @@ const Project = mongoose.model('Project', projectSchema);
 // Project endpoints
 app.post('/api/projects', authenticateToken, async (req, res) => {
     try {
-        const { name, description, startDate, endDate } = req.body;
+        const { name, description, owner,startDate, endDate, status} = req.body;
         const project = new Project({
             name,
             description,
             owner,
             startDate,
-            status,
-            endDate
+            endDate,
+            status
         });
         await project.save();
         res.status(201).json(project);
