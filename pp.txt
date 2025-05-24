@@ -1,0 +1,5 @@
+// Add pre-save middleware to update the updatedAt timestamp
+projectSchema.pre('save', function(next) {
+    this.updatedAt = new Date();
+    next();
+});

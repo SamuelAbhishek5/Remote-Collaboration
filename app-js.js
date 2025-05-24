@@ -21,7 +21,8 @@ const API_ENDPOINTS = {
     TASKS: `${API_BASE_URL}/tasks`,
     DOCUMENTS: `${API_BASE_URL}/documents`,
     ACTIVITIES: `${API_BASE_URL}/activities`,
-    INVITATIONS: `${API_BASE_URL}/invitations`
+    INVITATIONS: `${API_BASE_URL}/invitations`,
+    REFRESH: `${API_BASE_URL}/auth/refresh`
 };
 //document.getElementById("project-modal").style.display = "flex";
 // Initialize the application
@@ -30,7 +31,26 @@ document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
     checkAuthStatus();
 });
-
+// Add this to the beginning of any function that makes API calls
+function checkAuthTokenValidity() {
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+        showAuthSection();
+        return false;
+    }
+    
+    // Verify token format
+    try {
+        const tokenParts = token.split('.');
+        if (tokenParts.length !== 3) throw new Error('Invalid token format');
+        return true;
+    } catch (error) {
+        console.error('Token validation error:', error);
+        localStorage.removeItem('authToken');
+        showAuthSection();
+        return false;
+    }
+}
 // Check authentication status
 // Check authentication status
 function checkAuthStatus() {
@@ -1178,100 +1198,230 @@ function filterTeamMembers() {
 
 // FORM HANDLING FUNCTIONS
 
-// Handle project form submission
 function handleProjectSubmit(e) {
     e.preventDefault();
     
     // Get the auth token
     const token = localStorage.getItem('authToken');
     if (!token) {
-        alert('You must be logged in to create/edit projects');
-        return;
-    }
-    
-    // Get project ID if editing existing project
-    const projectId = document.getElementById('project-id')?.value;
-    
-    const projectData = {
-        name: document.getElementById('project-name').value,
-        description: document.getElementById('project-description').value, 
-        owner: document.getElementById('project-owner').value || currentUser._id,
-        startDate: document.getElementById('project-start-date').value,
-        endDate: document.getElementById('project-end-date').value,
-        status: document.getElementById('project-status').value
-    };
-
-    // Validate required fields
-    if (!projectData.name || !projectData.startDate || !projectData.endDate) {
-        alert('Please fill in all required fields');
+        alert('Authentication required. Please log in.');
+        showAuthSection();
         return;
     }
 
-    // Validate dates
-    const start = new Date(projectData.startDate);
-    const end = new Date(projectData.endDate);
-    if (end < start) {
-        alert('End date cannot be before start date');
-        return;
-    }
-    
-    const method = projectId ? 'PUT' : 'POST';
-    const url = projectId ? 
-        `${API_ENDPOINTS.PROJECTS}/${projectId}` : 
-        API_ENDPOINTS.PROJECTS;
-    
-    fetch(url, {
-        method,
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`, // Properly include the token
-            'Accept': 'application/json'
-        },
-        body: JSON.stringify(projectData)
-    })
-    .then(response => {
-        if (response.status === 401) {
-            throw new Error('Unauthorized - Please log in again');
+    try {
+        // Get and validate form data
+        const projectData = {
+            name: document.getElementById('project-name').value.trim(),
+            description: document.getElementById('project-description').value.trim(),
+            startDate: document.getElementById('project-start-date').value,
+            endDate: document.getElementById('project-end-date').value,
+            status: document.getElementById('project-status').value
+        };
+
+        // Client-side validation
+        const validationErrors = validateProjectData(projectData);
+        if (Object.keys(validationErrors).length > 0) {
+            const errorMessage = Object.values(validationErrors).join('\n');
+            alert(errorMessage);
+            return;
         }
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        return response.json();
-    })
-    .then(data => {
-        if (projectId) {
-            const index = projects.findIndex(p => p._id === projectId);
-            if (index !== -1) projects[index] = data;
-        } else {
-            projects.push(data);
-        }
+
+        // Get project ID if editing existing project
+        const projectId = document.getElementById('project-id')?.value;
         
-        closeModal('project-modal');
-        renderProjects();
-        
-        // Log activity
-        logActivity(
-            projectId ? 'Project updated' : 'Project created',
-            'project',
-            data.name
-        );
+        const method = projectId ? 'PUT' : 'POST';
+        const url = projectId ? 
+            `${API_ENDPOINTS.PROJECTS}/${projectId}` : 
+            API_ENDPOINTS.PROJECTS;
 
-        // Show success message
-        alert(`Project successfully ${projectId ? 'updated' : 'created'}!`);
-    })
-    .catch(error => {
-        console.error('Project save error:', error);
-        if (error.message.includes('Unauthorized')) {
-            // Handle unauthorized error
-            localStorage.removeItem('authToken'); // Clear invalid token
-            showAuthSection(); // Redirect to login
-            alert('Your session has expired. Please log in again.');
-        } else {
-            alert(`Failed to ${projectId ? 'update' : 'create'} project: ${error.message}`);
+        // Show loading state
+        const submitButton = document.querySelector('#project-form button[type="submit"]');
+        const originalButtonText = submitButton.textContent;
+        submitButton.textContent = 'Saving...';
+        submitButton.disabled = true;
+
+        fetch(url, {
+            method,
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(projectData)
+        })
+        .then(async response => {
+            const data = await response.json();
+            
+            if (!response.ok) {
+                // Handle specific error cases
+                if (response.status === 401) {
+                    throw new Error('token-invalid');
+                }
+                throw new Error(data.message || 'Failed to save project');
+            }
+            
+            return data;
+        })
+        .then(data => {
+            if (data.success) {
+                if (projectId) {
+                    const index = projects.findIndex(p => p._id === projectId);
+                    if (index !== -1) projects[index] = data.project;
+                } else {
+                    projects.push(data.project);
+                }
+                
+                closeModal('project-modal');
+                renderProjects();
+                
+                // Log activity
+                logActivity(
+                    projectId ? 'Project updated' : 'Project created',
+                    'project',
+                    data.project.name
+                );
+
+                // Show success message
+                alert(`Project successfully ${projectId ? 'updated' : 'created'}!`);
+            } else {
+                throw new Error(data.message || 'Failed to save project');
+            }
+        })
+        .catch(error => {
+            console.error('Project save error:', error);
+            
+            if (error.message === 'token-invalid') {
+                localStorage.removeItem('authToken');
+                currentUser = null;
+                showAuthSection();
+                alert('Your session has expired. Please log in again.');
+            } else {
+                alert(`Failed to ${projectId ? 'update' : 'create'} project: ${error.message}`);
+            }
+        })
+        .finally(() => {
+            // Reset button state
+            submitButton.textContent = originalButtonText;
+            submitButton.disabled = false;
+        });
+
+    } catch (error) {
+        console.error('Form handling error:', error);
+        alert('An error occurred while processing the form. Please try again.');
+    }
+}
+
+// Add this validation function
+function validateProjectData(data) {
+    const errors = {};
+
+    // Name validation
+    if (!data.name) {
+        errors.name = 'Project name is required';
+    } else if (data.name.length < 3) {
+        errors.name = 'Project name must be at least 3 characters long';
+    }
+
+    // Description validation
+    if (!data.description) {
+        errors.description = 'Project description is required';
+    } else if (data.description.length < 10) {
+        errors.description = 'Project description must be at least 10 characters long';
+    }
+
+    // Date validation
+    if (!data.startDate) {
+        errors.startDate = 'Start date is required';
+    }
+    if (!data.endDate) {
+        errors.endDate = 'End date is required';
+    }
+
+    if (data.startDate && data.endDate) {
+        const start = new Date(data.startDate);
+        const end = new Date(data.endDate);
+        
+        if (isNaN(start.getTime())) {
+            errors.startDate = 'Invalid start date';
         }
+        if (isNaN(end.getTime())) {
+            errors.endDate = 'Invalid end date';
+        }
+        if (end < start) {
+            errors.endDate = 'End date must be after start date';
+        }
+    }
+
+    // Status validation
+    const validStatuses = ['Not Started', 'In Progress', 'Completed', 'On Hold'];
+    if (!validStatuses.includes(data.status)) {
+        errors.status = 'Invalid project status';
+    }
+
+    return errors;
+}
+// Add this new token validation function
+function validateAndRefreshToken() {
+    return new Promise((resolve, reject) => {
+        const token = localStorage.getItem('authToken');
+        if (!token) {
+            reject(new Error('No token found'));
+            return;
+        }
+
+        // First try to validate the current token
+        fetch(`${API_ENDPOINTS.USERS}/me`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        })
+        .then(response => {
+            if (response.ok) {
+                resolve(token); // Current token is valid
+            } else if (response.status === 401) {
+                // Token is invalid/expired, try to refresh it
+                return fetch(`${API_ENDPOINTS.LOGIN}/refresh`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+            } else {
+                throw new Error('Token validation failed');
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Token refresh failed');
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Store new token and resolve with it
+            localStorage.setItem('authToken', data.token);
+            resolve(data.token);
+        })
+        .catch(error => {
+            console.error('Token validation error:', error);
+            reject(error);
+        });
     });
 }
-// Handle task form submission
+
+// Update getAuthHeader function to include content type
+function getAuthHeader() {
+    const token = localStorage.getItem('authToken');
+    return {
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+    };
+}
+//Handle task form submission
 function handleTaskSubmit(e) {
     e.preventDefault();
     
