@@ -3,3 +3,5 @@ projectSchema.pre('save', function(next) {
     this.updatedAt = new Date();
     next();
 });
+npm install express mongoose bcryptjs jsonwebtoken cors
+node server.js

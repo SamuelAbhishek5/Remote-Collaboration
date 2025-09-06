@@ -30,73 +30,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Check if user is logged in (from session/localStorage)  // Setup event listeners
     setupEventListeners();
     checkAuthStatus();
-});
-// Add this to the beginning of any function that makes API calls
-function checkAuthTokenValidity() {
-    const token = localStorage.getItem('authToken');
-    if (!token) {
-        showAuthSection();
-        return false;
-    }
-    
-    // Verify token format
-    try {
-        const tokenParts = token.split('.');
-        if (tokenParts.length !== 3) throw new Error('Invalid token format');
-        return true;
-    } catch (error) {
-        console.error('Token validation error:', error);
-        localStorage.removeItem('authToken');
-        showAuthSection();
-        return false;
-    }
-}
-// Check authentication status
-// Check authentication status
-function checkAuthStatus() {
-    const token = localStorage.getItem('authToken');
-    const currentPath = window.location.hash.slice(1) || 'dashboard';
-
-    // If no token, show auth section and hide all other sections
-    if (!token) {
-        hideAllSections();
-        showAuthSection();
-        return;
-    }
-
-    // Validate token with backend
-    fetch(`${API_ENDPOINTS.USERS}/me`, {
-        headers: {
-            'Authorization': `Bearer ${token}`
-        }
-    })
-    .then(response => {
-        if (response.ok) {
-            return response.json();
-        } else {
-            throw new Error('Invalid token');
-        }
-    })
-    .then(userData => {
-        currentUser = userData;
-        showLoggedInState();
+    // Handle browser navigation
+    window.addEventListener('hashchange', () => {
+        const currentPath = window.location.hash.slice(1) || 'dashboard';
         showSection(currentPath);
-        loadDashboardData();
-    })
-    .catch(error => {
-        console.error('Auth validation error:', error);
-        localStorage.removeItem('authToken');
-        hideAllSections();
-        showAuthSection();
-    });
-}
-// Hide all content sections
-function hideAllSections() {
-    document.querySelectorAll('.content-section').forEach(section => {
-        section.style.display = 'none';
-    });
-}
-
+    });  
+});
 
 // Setup all event listeners
 function setupEventListeners() {
@@ -189,9 +128,72 @@ function setupEventListeners() {
         });
     });
 }
+// Check authentication status
+function checkAuthStatus() {
+    const token = localStorage.getItem('authToken');
+    const currentPath = window.location.hash.slice(1) || 'dashboard';
 
-// AUTHENTICATION FUNCTIONS
+    // If no token, show auth section and hide all other sections
+    if (!token) {
+        hideAllSections();
+        showAuthSection();
+        return;
+    }
 
+    // Validate token with backend
+    fetch(`${API_ENDPOINTS.USERS}/me`, {
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    })
+    .then(response => {
+        if (response.ok) {
+            return response.json();
+        } else {
+            throw new Error('Invalid token');
+        }
+    })
+    .then(userData => {
+        currentUser = userData;
+        showLoggedInState();
+        showSection(currentPath);
+        loadDashboardData();
+    })
+    .catch(error => {
+        console.error('Auth validation error:', error);
+        localStorage.removeItem('authToken');
+        hideAllSections();
+        showAuthSection();
+    });
+}
+// Hide all content sections
+function hideAllSections() {
+    document.querySelectorAll('.content-section').forEach(section => {
+        section.style.display = 'none';
+    });
+}
+
+
+// Add this to the beginning of any function that makes API calls
+function checkAuthTokenValidity() {
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+        showAuthSection();
+        return false;
+    }
+    
+    // Verify token format
+    try {
+        const tokenParts = token.split('.');
+        if (tokenParts.length !== 3) throw new Error('Invalid token format');
+        return true;
+    } catch (error) {
+        console.error('Token validation error:', error);
+        localStorage.removeItem('authToken');
+        showAuthSection();
+        return false;
+    }
+}
 // Toggle between login and register forms
 function toggleAuthForms() {
     const authForms = document.querySelectorAll('.auth-form');
@@ -199,8 +201,6 @@ function toggleAuthForms() {
         form.style.display = form.style.display === 'none' ? 'block' : 'none';
     });
 }
-
-// Handle login form submission
 // Handle login form submission
 function handleLogin(e) {
     e.preventDefault();
@@ -329,7 +329,7 @@ function handleLogout() {
 
 // Show the auth section
 function showAuthSection() {
-    //hideAllSections();
+    hideAllSections();
     document.getElementById('auth-section').style.display = 'flex';
     document.getElementById('login-form-container').style.display = 'block';
     document.getElementById('register-form-container').style.display = 'none';
@@ -358,22 +358,6 @@ function showLoggedInState() {
     document.getElementById('logout-btn').style.display = 'block';
 }
 
-// Initialize the application
-document.addEventListener('DOMContentLoaded', () => {
-    // Check authentication status on page load
-    checkAuthStatus();
-    
-    // Setup event listeners
-    setupEventListeners();
-    
-    // Handle browser navigation
-    window.addEventListener('hashchange', () => {
-        const currentPath = window.location.hash.slice(1) || 'dashboard';
-        showSection(currentPath);
-    });
-});
-
-
 // Show specific section
 function showSection(sectionId) {
     const token = localStorage.getItem('authToken');
@@ -392,7 +376,7 @@ function showSection(sectionId) {
         showAuthSection();
         return;
     }
-    
+
     // Hide all sections - UNCOMMENT THIS LINE
     hideAllSections();
     
@@ -1625,9 +1609,9 @@ function updateProjectDropdowns() {
 }
 async function fetchProjects() {
     try {
-        const response = await fetch(`${API_URL}/projects`, {
+        const response = await fetch(`${API_BASE_URL}/projects`, {
             headers: {
-                'Authorization': `Bearer ${token}`
+                'Authorization': `Bearer ${localStorage.getItem('authToken')}`
             }
         });
         const projects = await response.json();
@@ -1644,9 +1628,9 @@ async function fetchProjects() {
 // Fetch all users
 async function fetchUsers() {
     try {
-        const response = await fetch(`${API_URL}/users`, {
+        const response = await fetch(`${API_BASE_URL}/users`, {
             headers: {
-                'Authorization': `Bearer ${token}`
+                'Authorization': `Bearer ${localStorage.getItem('authToken')}`
             }
         });
         const users = await response.json();
@@ -1663,9 +1647,9 @@ async function fetchUsers() {
 // Fetch all tasks
 async function fetchTasks() {
     try {
-        const response = await fetch(`${API_URL}/tasks`, {
+        const response = await fetch(`${API_BASE_URL}/tasks`, {
             headers: {
-                'Authorization': `Bearer ${token}`
+                'Authorization': `Bearer ${localStorage.getItem('authToken')}`
             }
         });
         const tasks = await response.json();

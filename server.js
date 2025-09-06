@@ -279,37 +279,23 @@ const Project = mongoose.model('Project', projectSchema);
 
 // Project endpoints
 // Add this enhanced token validation middleware
-function validateToken() {
-    return new Promise((resolve, reject) => {
-        const token = localStorage.getItem('authToken');
-        if (!token) {
-            reject(new Error('No token available'));
-            return;
-        }
+// Enhanced token validation middleware for Express routes
+function validateToken(req, res, next) {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
 
-        fetch(`${API_ENDPOINTS.USERS}/me`, {
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        })
-        .then(response => {
-            if (response.ok) {
-                return response.json();
-            }
-            throw new Error('Token validation failed');
-        })
-        .then(data => {
-            if (data.success) {
-                resolve(token);
-            } else {
-                throw new Error(data.message || 'Token validation failed');
-            }
-        })
-        .catch(error => {
-            console.error('Token validation error:', error);
-            reject(error);
-        });
-    });
+    if (!token) {
+        return res.status(401).json({ message: 'Access denied. No token provided.' });
+    }
+
+    try {
+        const verified = jwt.verify(token, 'bda@1234'); // Use the same secret key as login/register
+        req.user = verified;
+        next();
+    } catch (error) {
+        console.error('Token validation error:', error);
+        return res.status(401).json({ message: 'Invalid or expired token.' });
+    }
 }
 
 
