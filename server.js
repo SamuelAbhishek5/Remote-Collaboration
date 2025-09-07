@@ -42,7 +42,8 @@ const userSchema = new mongoose.Schema({
     createdAt: {
         type: Date,
         default: Date.now
-    }
+    },
+    team: { type: mongoose.Schema.Types.ObjectId, ref: 'Team' }
 });
 
 const User = mongoose.model('User', userSchema);
@@ -77,7 +78,7 @@ app.post('/api/auth/register', async (req, res) => {
         const token = jwt.sign(
             { userId: user._id },
             'bda@1234', // Replace with a secure secret key
-            { expiresIn: '24h' }
+            { expiresIn: '5m' }
         );
 
         // Return user data and token
@@ -117,7 +118,7 @@ app.post('/api/auth/login', async (req, res) => {
         const token = jwt.sign(
             { userId: user._id },
             'bda@1234', // Replace with a secure secret key
-            { expiresIn: '24h' }
+            { expiresIn: '5m' }
         );
 
         // Return user data and token
@@ -366,7 +367,7 @@ app.post('/api/projects', validateToken, async (req, res) => {
 
         // Populate owner and team details
         await savedProject.populate('owner', 'name email');
-        await savedProject.populate('team', 'name email');
+        //await savedProject.populate('team', 'name email');
 
         res.status(201).json({
             success: true,
@@ -453,7 +454,7 @@ app.get('/api/users/names', authenticateToken, async (req, res) => {
         // Find all users but exclude password field
         const users = await User
             .find({})
-            .project({ name: 1 }) // Include only 'name' field
+            .select({ name: 1 }) // Include only 'name' field
             .toArray();
 
         res.json(users);

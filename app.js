@@ -619,38 +619,47 @@ function renderDeadlines(deadlines) {
 }
 
 // Render projects
-function renderProjects() {
+function renderProjects(projectList = projects) {
     const container = document.getElementById('projects-container');
     container.innerHTML = '';
-    
-    if (projects.length === 0) {
+
+    if (!projectList || projectList.length === 0) {
         container.innerHTML = '<p>No projects found. Create your first project!</p>';
         return;
     }
-    
-    projects.forEach(project => {
-        const projectElement = document.createElement('div');
-        projectElement.className = 'project-card';
-        projectElement.setAttribute('data-id', project._id);
-        projectElement.onclick = () => openProjectDetails(project._id);
-        
-        // Calculate progress percentage
+
+    projectList.forEach(project => {
         const startDate = new Date(project.startDate);
         const endDate = new Date(project.endDate);
         const currentDate = new Date();
         const totalDuration = endDate - startDate;
         const elapsed = currentDate - startDate;
-        const progress = Math.min(100, Math.max(0, Math.round((elapsed / totalDuration) * 100)));
-        
-        // Format team members display
-        const teamAvatars = project.team.slice(0, 3).map(member => {
-            const initials = member.name.split(' ').map(n => n[0]).join('');
-            return `<div class="team-avatar">${initials}</div>`;
-        }).join('');
-        
-        const moreMembers = project.team.length > 3 ? 
-            `<div class="team-avatar team-more">+${project.team.length - 3}</div>` : '';
-        
+        const progress = totalDuration > 0 ? Math.min(100, Math.max(0, Math.round((elapsed / totalDuration) * 100))) : 0;
+
+        // Owner initials
+        let ownerInitials = '';
+        if (project.owner && typeof project.owner === 'object' && project.owner.name) {
+            ownerInitials = project.owner.name.split(' ').map(n => n[0]).join('');
+        } else if (project.owner && typeof project.owner === 'string') {
+            ownerInitials = project.owner.slice(0, 2).toUpperCase();
+        }
+
+        // Team avatars (if available)
+        let teamAvatars = '';
+        let moreMembers = '';
+        if (Array.isArray(project.team)) {
+            teamAvatars = project.team.slice(0, 3).map(member => {
+                const initials = member.name ? member.name.split(' ').map(n => n[0]).join('') : '';
+                return `<div class="team-avatar">${initials}</div>`;
+            }).join('');
+            moreMembers = project.team.length > 3 ? `<div class="team-avatar team-more">+${project.team.length - 3}</div>` : '';
+        }
+
+        const projectElement = document.createElement('div');
+        projectElement.className = 'project-card';
+        projectElement.setAttribute('data-id', project._id);
+        projectElement.onclick = () => openProjectDetails(project._id);
+
         projectElement.innerHTML = `
             <div class="project-header">
                 <div class="project-title">${project.name}</div>
@@ -664,6 +673,10 @@ function renderProjects() {
                         ${formatDate(startDate)} - ${formatDate(endDate)}
                     </div>
                     <div class="project-info-item">
+                        <i class="fas fa-user"></i>
+                        Owner: ${ownerInitials}
+                    </div>
+                    <div class="project-info-item">
                         <i class="fas fa-tasks"></i>
                         ${project.tasksCount || 0} Tasks
                     </div>
@@ -671,6 +684,7 @@ function renderProjects() {
                 <div class="progress-bar">
                     <div class="progress" style="width: ${progress}%;"></div>
                 </div>
+                ${teamAvatars || moreMembers ? `
                 <div class="project-team">
                     <div class="team-label">Team</div>
                     <div class="team-avatars">
@@ -678,9 +692,10 @@ function renderProjects() {
                         ${moreMembers}
                     </div>
                 </div>
+                ` : ''}
             </div>
         `;
-        
+
         container.appendChild(projectElement);
     });
 }

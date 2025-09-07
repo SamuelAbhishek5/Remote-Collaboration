@@ -5,3 +5,25 @@ projectSchema.pre('save', function(next) {
 });
 npm install express mongoose bcryptjs jsonwebtoken cors
 node server.js
+├── api/               // API calls & authentication
+│   ├── auth.js        // login, register, logout, token validation
+│   ├── projects.js    // fetchProjects, project API calls
+│   ├── tasks.js       // fetchTasks, task API calls
+│   ├── documents.js   // fetchDocuments, document API calls
+│   ├── users.js       // fetchUsers, team API calls
+│   └── activities.js  // activity logging API calls
+│
+├── ui/                // UI rendering & modals
+│   ├── navigation.js  // showSection, hideAllSections, setupEventListeners
+│   ├── dashboard.js   // loadDashboardData, renderActivities, renderDeadlines
+│   ├── projectsUI.js  // renderProjects, openProjectModal
+│   ├── tasksUI.js     // renderTasks, openTaskModal
+│   ├── documentsUI.js // renderDocuments, openDocumentModal
+│   ├── teamUI.js      // renderTeamMembers
+│   └── modals.js      // open/close modal helpers
+│
+├── utils/             // Helper & utility functions
+│   ├── format.js      // formatDate, formatTimeAgo, formatStatus, formatDocType
+│   ├── validators.js  // validateProjectData, checkAuthTokenValidity
+│   ├── filters.js     // filterProjects, filterTasks, filterDocuments, filterTeamMembers
+│   └── helpers.js  
